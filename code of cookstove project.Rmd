@@ -1,0 +1,1577 @@
+---
+title: "Code: Analysis of messaging and financing on demand for non-traditional cookstove adoption in Uganda"
+author: "Ellie Bauer, Eric Gero, Chunyu Qu, Braden Spratt"
+date: "3/19/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# 1. Variables
+
+
+## 1.1. Clean the data
+```{r, warning=FALSE ,message=FALSE,error=FALSE,echo=FALSE}
+library(tidyverse) 
+library(rstatix)
+library(ggpubr)
+
+### Clean the enviroment
+rm(list = ls())
+
+### Import the data, Note: Data in capital
+Data=read.csv("Marketing_messages_and_stoves.csv",stringsAsFactors = FALSE)
+
+# Exchange currency to USD
+Data$MAXBID = Data$MAXBID/2515
+Data$MAXBIDNOVEL = Data$MAXBIDNOVEL/2515
+Data$PAID_PRICE = Data$PAID_PRICE/2515
+Data$WINNING_AMOUNT = Data$WINNING_AMOUNT/2515
+Data$DEPOSIT_ON_SALES_DAY = Data$DEPOSIT_ON_SALES_DAY/2515
+
+# Save the full dataset to a new frame for later operations
+Fulldata=Data
+
+### Replace missing values with NA
+Data[Data == "."] <- NA
+Data[Data == ""] <- NA
+
+### Delete all the observations with missing values in "GROUP"
+Data=Data[!is.na(Data$GROUP), ]
+
+### 69 imcomplete observations are deleted
+
+```
+## 1.2. Select Variables
+
+### (1) Fixed Effect Variables - TBD
+DATESURVEY  
+UNIQUE_HHID  
+PARISH  
+
+
+### (2) Houshold socio-economic and demographic variables - H
+We ignore ***gatherwood or buywood last month*** due to possible error in memory and low impact from a past event.  
+  
+1. FEMALE - gender(6 missing)  
+2. AGE - age(6 missing)  
+3. MARRIED - marital status(0 missing)  
+4. WIFECOOK - whether the wife is the primary cook(0 missing)  
+5. JOINTDECISION - whether husband and wife make decisions jointly(0 missing)  
+6. KNOWLUNCH_Dummy - Respondent knows how many people ate lunch  
+7. LUNCHYESTERDAY - How many ate lunch at HH yesterday (***252 missing***)  
+8. TYPICALNUMEATING_Dummy - Was Yesterday Lunch Typical (***252 missing***)  
+9. HOWPAID (***285 missing, ignored in regression***, as almost all the people paied in cash, we do not estimate the impact of paying in cash due to the extreme inbalance in different types of payment.)
+
+### (3) Wealth variables - W
+We ignore SPOUSE phone since there are 473 missing values (about 20% of whole data set). 
+
+1. HH_PHONES - Count of phones owned by household(0 missing)  
+2. INCOME_Dummy - Earns income(6 missing)  
+3. BICYCLE_DUMMY(4 missing), CAR_DUMMY(4 missing), MOTORCYCLE_DUMMY(4 missing)  
+4. RADIO_DUMMY(6 missing)  
+5. SELFEMPLOYED(***290 missing***)  
+6. TIME_EMPLOYED(***291 missing***)  
+7. COWS_Dummy(6 missing)  
+8. TV_Dummy(7 missing)  
+9. Total_Asset - this is computed with all the wealth dummies and durable good prices provided. 
+
+### (4) Cookstove variables - C
+1.WOOD - the dummy of whether wood is the primary fuel(0 missing)  
+2. TSF_PRIMARY - whether a three-stone fire is the primary stove. None means owning a stone stove(6 missing)  
+3. BUYWOOD_DUMMY- buys wood last week or month(6 missing)  
+4. GATHERWOOD_DUMMY -  whether the household gathered wood last week(6 missing)  
+5. STOVE1 - Type of stove already owned  
+
+### (5) Dependent variables - Y
+1. MAXBID  
+2. MAXBIDNOVEL  
+
+### (6) Gender interaction varibles 
+Female_AGE  
+Female_MARRIED  
+Female_WIFECOOK  
+Female_JOINTDECISION  
+Female_KNOWLUNCH_Dummy  
+Female_LUNCHYESTERDAY  
+Female_HH_PHONES  
+Female_INCOME_Dummy  
+Female_MOTORCYCLE_DUMMY  
+Female_CAR_DUMMY  
+Female_RADIO_DUMMY  
+Female_COWS_Dummy  
+Female_TV_Dummy  
+Female_WOOD  
+Female_TSF_PRIMARY  
+Female_BUYWOOD_DUMMY  
+Female_GATHERWOOD_DUMMY  
+
+## 1.3. Overview of auctions - Table 1
+
+HH received messages and reported is 2234. 
+Payment type recorded is 2018
+
+```{r}
+## Toal HH amount
+length(Fulldata$HHID)
+## HH's that took Demand Determinant Survey
+length(Data$DATESURVEY)
+## HH's that bid on Pay Within a Week Auction - number of wining
+# 2125
+sum(Data$WIN_TRADITIONAL_OFFER, na.rm=T)
+## HH's that bid on time payment - number of wining
+# 2135
+sum(Data$WIN_NOVEL_OFFER, na.rm=T)
+## HH's are female
+sum(Fulldata$FEMALE,na.rm = T)
+```
+```{r}
+mean(Fulldata$MAXBID, na.rm=T)
+sd(Fulldata$MAXBID, na.rm=T)
+t.test(Fulldata$MAXBID)
+median(Fulldata$MAXBID, na.rm=T)
+
+
+mean(Fulldata$MAXBIDNOVEL, na.rm=T)
+sd(Fulldata$MAXBIDNOVEL, na.rm=T)
+t.test(Fulldata$MAXBIDNOVEL)
+median(Fulldata$MAXBIDNOVEL, na.rm=T)
+```
+For tradition bids
+```{r}
+# Winning bids
+tradition = Fulldata[which(Fulldata$WIN_TRADITIONAL_OFFER== 1), ]
+length(tradition$WINNING_AMOUNT)-sum(is.na(tradition$WINNING_AMOUNT))
+mean(tradition$WINNING_AMOUNT)
+sd(tradition$WINNING_AMOUNT)
+t.test(tradition$WINNING_AMOUNT)
+median(tradition$WINNING_AMOUNT)
+
+
+
+# Second price paid
+47 -sum(is.na(tradition$PAID_PRICE))
+mean(tradition$PAID_PRICE,na.rm = T)
+sd(tradition$PAID_PRICE,na.rm = T)
+t.test(tradition$PAID_PRICE)
+median(tradition$PAID_PRICE,na.rm = T)
+
+# Deposit paid for stove
+47 -sum(is.na(tradition$DEPOSIT_ON_SALES_DAY))
+mean(tradition$DEPOSIT_ON_SALES_DAY)
+sd(tradition$DEPOSIT_ON_SALES_DAY)
+t.test(tradition$DEPOSIT_ON_SALES_DAY)
+median(tradition$DEPOSIT_ON_SALES_DAY)
+
+# Stoves returned
+sum(tradition$PAID_IN_FULL)
+sum(tradition$RETURNED)
+sum(tradition$DEFAULT)
+sum(tradition$PAYMENT_COMPLETE)
+```
+For time payment
+```{r}
+timepay = Fulldata[which(Fulldata$WIN_NOVEL_OFFER== 1), ]
+length(timepay$WINNING_AMOUNT)-sum(is.na(timepay$WINNING_AMOUNT))
+mean(timepay$WINNING_AMOUNT)
+sd(timepay$WINNING_AMOUNT)
+t.test(timepay$WINNING_AMOUNT)
+median(timepay$WINNING_AMOUNT)
+
+45 -sum(is.na(timepay$PAID_PRICE))
+mean(timepay$PAID_PRICE,na.rm = T)
+sd(timepay$PAID_PRICE,na.rm = T)
+t.test(timepay$PAID_PRICE)
+median(timepay$PAID_PRICE,na.rm = T)
+
+45 -sum(is.na(timepay$DEPOSIT_ON_SALES_DAY))
+mean(timepay$DEPOSIT_ON_SALES_DAY)
+sd(timepay$DEPOSIT_ON_SALES_DAY)
+t.test(timepay$DEPOSIT_ON_SALES_DAY)
+median(timepay$DEPOSIT_ON_SALES_DAY)
+
+sum(timepay$PAID_IN_FULL)
+sum(timepay$RETURNED)
+sum(timepay$DEFAULT)
+sum(timepay$PAYMENT_COMPLETE)
+```
+
+## 1.4 Overview of message groups - Table 2
+Together with balance check later
+```{r}
+No_Message = Fulldata[which(Fulldata$GROUP== "No Message"), ]
+Saves_Time_Money  = Fulldata[which(Fulldata$GROUP== "Saves Time and Money"), ]
+Improves_Health = Fulldata[which(Fulldata$GROUP== "Improves Health"), ]
+Time_Money_Health = Fulldata[which(Fulldata$GROUP== "Time, Money and Health"), ]
+
+library(data.table)
+table2 = transpose(data.frame(c(mean(No_Message$MAXBID,na.rm = T),sd(No_Message$MAXBID,na.rm = T),median(No_Message$MAXBID,na.rm = T), sum(No_Message$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Saves_Time_Money$MAXBID,na.rm = T),sd(Saves_Time_Money$MAXBID,na.rm = T),median(Saves_Time_Money$MAXBID,na.rm = T), sum(Saves_Time_Money$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Improves_Health$MAXBID,na.rm = T),sd(Improves_Health$MAXBID,na.rm = T),median(Improves_Health$MAXBID,na.rm = T), sum(Improves_Health$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Time_Money_Health$MAXBID,na.rm = T),sd(Time_Money_Health$MAXBID,na.rm = T),median(Time_Money_Health$MAXBID,na.rm = T), sum(Time_Money_Health$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(No_Message$MAXBIDNOVEL,na.rm = T),sd(No_Message$MAXBIDNOVEL,na.rm = T),median(No_Message$MAXBIDNOVEL,na.rm = T), sum(No_Message$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Saves_Time_Money$MAXBIDNOVEL,na.rm = T),sd(Saves_Time_Money$MAXBIDNOVEL,na.rm = T),median(Saves_Time_Money$MAXBIDNOVEL,na.rm = T), sum(Saves_Time_Money$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Improves_Health$MAXBIDNOVEL,na.rm = T),sd(Improves_Health$MAXBIDNOVEL,na.rm = T),median(Improves_Health$MAXBIDNOVEL,na.rm = T), sum(Improves_Health$WIN_TRADITIONAL_OFFER,na.rm = T)),
+
+c(mean(Time_Money_Health$MAXBIDNOVEL,na.rm = T),sd(Time_Money_Health$MAXBIDNOVEL,na.rm = T),median(Time_Money_Health$MAXBIDNOVEL,na.rm = T), sum(Time_Money_Health$WIN_TRADITIONAL_OFFER,na.rm = T))))
+
+colnames(table2) <- c("mean", "sd","median", "p-value")
+
+table2
+```
+***Perform Joint test***   
+Note the assumptions for the F Test for comparing three or more means include:  
+1. The populations from which the samples were obtained must be normally or
+approximately normally distributed.  
+2. The samples must be independent of one another.  
+3. The variances of the populations must be equal.  
+  
+Specifically, we cannot gaurantee there is no endogeneity issue, which will violate assumption 2 and 3. To safely test the hypothesis that the means of all the groups are equal, we adopt both ANOVA and Kruskal-Wallis test for comparison
+
+We report the nonparametric joint test for the means here
+```{r}
+Fulldata$GROUP<- factor(Fulldata$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+
+Maxbid_mean <- tapply(Fulldata$MAXBID, Fulldata$GROUP)
+Maxbid_sd <- tapply(Fulldata$MAXBID, Fulldata$GROUP, sd)
+
+# ANOVA F-test
+Maxbid_ANOVA <- lm(MAXBID ~ GROUP, Fulldata)
+anova(Maxbid_ANOVA)
+
+# Nonparametric test
+kruskal.test(MAXBID ~ GROUP, Fulldata)
+```
+
+```{r}
+Fulldata$GROUP<- factor(Fulldata$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+
+Maxbidnovel_mean <- tapply(Fulldata$MAXBIDNOVEL, Fulldata$GROUP)
+Maxbidnovel_sd <- tapply(Fulldata$MAXBIDNOVEL, Fulldata$GROUP, sd)
+
+# ANOVA F-test
+Maxbidnovel_ANOVA <- lm(MAXBIDNOVEL ~ GROUP, Fulldata)
+anova(Maxbidnovel_ANOVA)
+
+# Nonparametric test
+kruskal.test(MAXBIDNOVEL ~ GROUP, Fulldata)
+```
+
+# 2 Balance check
+Check if randomization is successful.
+$$Y_{i}=\beta_{0}+\beta_{1}Message_i+\epsilon_i$$
+$$X_{i}=\beta_{0}+\beta_{1}Message_i+\epsilon_i$$
+where $Y_{i0}$ in (1) denotes the bidprice and novel bid price, $X_{i0}$ in (1) denotes all the explanatory variables in the following section (H, W, C). $Message_i$ is the variable of the four groups.
+  
+Next, we perform an overall joint test of balance in characteristics using the following specification 
+$$Message_{i}=\alpha+\beta'Y_{i}+\gamma'X_{i}+\epsilon_i$$
+
+
+## 2.1 A detailed illustration on age
+### (1) Table of descriptive statistics by treatment group
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Number of missing values
+sum(is.na(Data$AGE))
+### 6 missing values reported
+
+### Clean the incomplete observations, note: save in a new "data" in lower
+data=Data[!is.na(Data$AGE), ]
+
+### Set the preferred ordering of groups in tables and graphs
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+
+### Table of descriptive statistics by treatment group
+Age_mean <- tapply(data$AGE, data$GROUP, mean)
+Age_sd <- tapply(data$AGE, data$GROUP, sd)
+n         <- tapply(data$AGE, data$GROUP, length)
+data.frame(mean = Age_mean, std.dev = Age_sd, n = n)
+```
+### (2) Visualization with strip chart - For non-technical Memo
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+ggplot(data, aes(GROUP, AGE, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "Age of respondents") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+```
+
+### (3) Blance Check - Fixed effects ANOVA and Nonparametric Test- For Technical Memo
+We adopt both ANOVA and Kruskal test here, again.
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Anova Test
+Age_ANOVA <- lm(AGE ~ GROUP, data)
+anova(Age_ANOVA)
+
+### Krusal-Wallis test
+kruskal.test(AGE ~ GROUP, data )
+```
+Both tests do not reject the null hypothesis, implying no significant differences in age among the four groups. 
+
+## 2.2 All Variables 
+### 2.2.1 Houshold socio-economic and demographic variables - H
+We ignore ***gatherwood or buywood last month*** due to possible error in memory and low impact from a past event.  
+  
+1.FEMALE 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary Stats
+### Use the dummy for female, delete all the missing values
+data=Data[!is.na(Data$FEMALE), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+FEMALE_mean <- tapply(data$FEMALE, data$GROUP, mean)
+FEMALE_sd <- tapply(data$FEMALE, data$GROUP, sd)
+n <- tapply(data$FEMALE, data$GROUP, length)
+data.frame(mean = FEMALE_mean, std.dev = FEMALE_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, FEMALE, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "Female") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(GENDER ~ GROUP, data )
+```
+3. MARRIED - marital status. We use MARRIED for balance check based on the distribution of the 5 different types. We use STATUS for visualization. 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary Stats
+### Use the dummy for STATUS, delete all the missing values (not clean upon MARRIED since it is a dummy without missing values, which means new error will be brought)
+data=Data[!is.na(Data$STATUS), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+MARRIED_mean <- tapply(data$MARRIED, data$GROUP, mean)
+MARRIED_sd <- tapply(data$MARRIED, data$GROUP, sd)
+n <- tapply(data$MARRIED, data$GROUP, length)
+data.frame(mean = MARRIED_mean, std.dev = MARRIED_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, STATUS, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "Marrital Status") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(STATUS ~ GROUP, data )
+```
+4. WIFECOOK - whether the wife is the primary cook. We use WIFECOOK for balance check based on the distribution of the 4 different types. We use PRIMARYCOOK2 for visualization. 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data=Data[!is.na(Data$PRIMARYCOOK2), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+WIFECOOK_mean <- tapply(data$WIFECOOK, data$GROUP, mean)
+WIFECOOK_sd <- tapply(data$WIFECOOK, data$GROUP, sd)
+n <- tapply(data$WIFECOOK, data$GROUP, length)
+data.frame(mean = WIFECOOK_mean, std.dev = WIFECOOK_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, PRIMARYCOOK2, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "PRIMARYCOOK2") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(WIFECOOK ~ GROUP, data )
+```
+
+5. JOINTDECISION - whether husband and wife make decisions jointly. We use JOINTDECISION for balance check based on the distribution of the 5 different types. We use DECISIONS2 for visualization.  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data=Data[!is.na(Data$DECISIONS2), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+JOINTDECISION_mean <- tapply(data$JOINTDECISION, data$GROUP, mean)
+JOINTDECISION_sd <- tapply(data$JOINTDECISION, data$GROUP, sd)
+n <- tapply(data$JOINTDECISION, data$GROUP, length)
+data.frame(mean = JOINTDECISION_mean, std.dev = JOINTDECISION_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, DECISIONS2, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "DECISIONS2") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(JOINTDECISION ~ GROUP, data )
+```
+6. KNOWLUNCH - Respondent knows how many people ate lunch  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Create KNOWLUNCH_Dummy
+data_plus=data
+data=Data[!is.na(Data$KNOWLUNCH), ]
+data$KNOWLUNCH_Dummy = data$KNOWLUNCH
+data$KNOWLUNCH_Dummy[data$KNOWLUNCH_Dummy == "No"] <- 0
+data$KNOWLUNCH_Dummy[data$KNOWLUNCH_Dummy == "Yes"] <- 1
+data_plus$KNOWLUNCH_Dummy = data$KNOWLUNCH_Dummy
+
+
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+KNOWLUNCH_Dummy_mean <- tapply(as.numeric(data$KNOWLUNCH_Dummy), data$GROUP, mean)
+KNOWLUNCH_Dummy_sd <- tapply(as.numeric((data$KNOWLUNCH_Dummy)), data$GROUP, sd)
+n <- tapply(data$KNOWLUNCH_Dummy, data$GROUP, length)
+data.frame(mean = KNOWLUNCH_Dummy_mean, std.dev = KNOWLUNCH_Dummy_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, KNOWLUNCH, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "KNOWLUNCH") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(KNOWLUNCH_Dummy ~ GROUP, data )
+data_plus$KNOWLUNCH_Dummy=as.numeric(data_plus$KNOWLUNCH_Dummy)
+```
+
+7. LUNCHYESTERDAY - How many ate lunch at HH yesterday (252 missing)  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$LUNCHYESTERDAY), ]
+
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+LUNCHYESTERDAY_mean <- tapply(as.numeric(data$LUNCHYESTERDAY), data$GROUP, mean)
+LUNCHYESTERDAY_sd <- tapply(as.numeric((data$LUNCHYESTERDAY)), data$GROUP, sd)
+n <- tapply(data$LUNCHYESTERDAY, data$GROUP, length)
+data.frame(mean = LUNCHYESTERDAY_mean, std.dev = LUNCHYESTERDAY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, LUNCHYESTERDAY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=1, show.legend=FALSE) +
+  ylab(label = "LUNCHYESTERDAY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(LUNCHYESTERDAY ~ GROUP, data )
+```
+
+8. TYPICALNUMEATING_Dummy - Was Yesterday Lunch Typical (252 missing) - Not included in joint test
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Create TYPICALNUMEATING_Dummy
+data=data_plus
+data$TYPICALNUMEATING_Dummy = data$TYPICALNUMEATING
+data$TYPICALNUMEATING_Dummy[data$TYPICALNUMEATING_Dummy != "Yes"] <- 0
+data$TYPICALNUMEATING_Dummy[data$TYPICALNUMEATING_Dummy == "Yes"] <- 1
+data_plus$TYPICALNUMEATING_Dummy = data$TYPICALNUMEATING_Dummy
+
+data=data[!is.na(data$TYPICALNUMEATING_Dummy), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+TYPICALNUMEATING_Dummy_mean <- tapply(as.numeric(data$TYPICALNUMEATING_Dummy), data$GROUP, mean)
+TYPICALNUMEATING_Dummy_sd <- tapply(as.numeric((data$TYPICALNUMEATING_Dummy)), data$GROUP, sd)
+n <- tapply(data$TYPICALNUMEATING_Dummy, data$GROUP, length)
+data.frame(mean = TYPICALNUMEATING_Dummy_mean, std.dev = TYPICALNUMEATING_Dummy_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, TYPICALNUMEATING, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "TYPICALNUMEATING") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(TYPICALNUMEATING_Dummy ~ GROUP, data )
+
+```
+9. HOWPAID
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Create Cashpaid_Dummy
+data=data_plus
+data$CASHPAID_Dummy = data$HOWPAID
+data$CASHPAID_Dummy[data$CASHPAID_Dummy == "In-kind only"] <- 0
+data$CASHPAID_Dummy[data$CASHPAID_Dummy == "Not paid"] <- 0
+data$CASHPAID_Dummy[data$CASHPAID_Dummy == "Cash only"] <- 1
+data$CASHPAID_Dummy[data$CASHPAID_Dummy == "Cash and in-kind"] <- 1
+data_plus$CASHPAID_Dummy = as.numeric(data$CASHPAID_Dummy)
+
+data=data[!is.na(data$CASHPAID_Dummy), ]
+
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+CASHPAID_Dummy_mean <- tapply(as.numeric(data$CASHPAID_Dummy), data$GROUP, mean)
+CASHPAID_Dummy_sd <- tapply(as.numeric((data$CASHPAID_Dummy)), data$GROUP, sd)
+n <- tapply(data$CASHPAID_Dummy, data$GROUP, length)
+data.frame(mean = CASHPAID_Dummy_mean, std.dev = CASHPAID_Dummy_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, CASHPAID_Dummy, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.5, show.legend=FALSE) +
+  ylab(label = "Cashpaid Dummy") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(CASHPAID_Dummy ~ GROUP, data )
+
+```
+
+
+### 2.2.2 Wealth variables - W
+We ignore SPOUSE phone since there are 473 missing values (about 20% of whole data set). 
+
+1. HH_PHONES - Count of phones owned by household  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$HH_PHONES ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+HH_PHONES_mean <- tapply(as.numeric(data$HH_PHONES), data$GROUP, mean)
+HH_PHONES_sd <- tapply(as.numeric((data$HH_PHONES)), data$GROUP, sd)
+n <- tapply(data$HH_PHONES, data$GROUP, length)
+data.frame(mean = HH_PHONES_mean, std.dev = HH_PHONES_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, HH_PHONES, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "HH_PHONES") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(HH_PHONES ~ GROUP, data )
+```
+2. INCOME - Earns income  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Create INCOME_Dummy
+data=Data[!is.na(Data$INCOME), ]
+data$INCOME_Dummy = data$INCOME
+data$INCOME_Dummy[data$INCOME_Dummy != "Yes"] <- 0
+data$INCOME_Dummy[data$INCOME_Dummy == "Yes"] <- 1
+data_plus$INCOME_Dummy = data$INCOME_Dummy
+
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+Income_mean <- tapply(as.numeric(data$INCOME_Dummy), data$GROUP, mean)
+Income_sd <- tapply(as.numeric((data$INCOME_Dummy)), data$GROUP, sd)
+n <- tapply(data$INCOME_Dummy, data$GROUP, length)
+data.frame(mean = Income_mean, std.dev = Income_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, INCOME_Dummy, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "INCOME_Dummy") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(INCOME_Dummy ~ GROUP, data )
+```
+3. VEHICLE1 (BICYCLE_DUMMY, CAR_DUMMY, MOTORCYCLE_DUMMY)  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+BICYCLE_DUMMY_mean <- tapply(as.numeric(data$BICYCLE_DUMMY ), data$GROUP, mean)
+BICYCLE_DUMMY_sd <- tapply(as.numeric((data$BICYCLE_DUMMY )), data$GROUP, sd)
+n <- tapply(data$BICYCLE_DUMMY , data$GROUP, length)
+data.frame(mean = BICYCLE_DUMMY_mean, std.dev = BICYCLE_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, BICYCLE_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "BICYCLE_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(BICYCLE_DUMMY ~ GROUP, data )
+
+######################################################################
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+CAR_DUMMY_mean <- tapply(as.numeric(data$CAR_DUMMY ), data$GROUP, mean)
+CAR_DUMMY_sd <- tapply(as.numeric((data$CAR_DUMMY )), data$GROUP, sd)
+n <- tapply(data$CAR_DUMMY , data$GROUP, length)
+data.frame(mean = CAR_DUMMY_mean, std.dev = CAR_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, CAR_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "CAR_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(CAR_DUMMY ~ GROUP, data )
+
+#######################################################################
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+MOTORCYCLE_DUMMY_mean <- tapply(as.numeric(data$MOTORCYCLE_DUMMY ), data$GROUP, mean)
+MOTORCYCLE_DUMMY_sd <- tapply(as.numeric((data$MOTORCYCLE_DUMMY )), data$GROUP, sd)
+n <- tapply(data$MOTORCYCLE_DUMMY , data$GROUP, length)
+data.frame(mean = MOTORCYCLE_DUMMY_mean, std.dev = MOTORCYCLE_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, MOTORCYCLE_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "MOTORCYCLE_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(MOTORCYCLE_DUMMY ~ GROUP, data )
+```
+
+
+4. RADIO_DUMMY 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+RADIO_DUMMY_mean <- tapply(as.numeric(data$RADIO_DUMMY ), data$GROUP, mean)
+RADIO_DUMMY_sd <- tapply(as.numeric((data$RADIO_DUMMY )), data$GROUP, sd)
+n <- tapply(data$RADIO_DUMMY , data$GROUP, length)
+data.frame(mean = RADIO_DUMMY_mean, std.dev = RADIO_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, RADIO_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "RADIO_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(RADIO_DUMMY ~ GROUP, data )
+```
+5. SELFEMPLOYED   - Visualization on MAINEMPLOYER, test on SELFEMPLOYED 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$SELFEMPLOYED ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+SELFEMPLOYED_mean <- tapply(as.numeric(data$SELFEMPLOYED ), data$GROUP, mean)
+SELFEMPLOYED_sd <- tapply(as.numeric((data$SELFEMPLOYED )), data$GROUP, sd)
+n <- tapply(data$SELFEMPLOYED , data$GROUP, length)
+data.frame(mean = SELFEMPLOYED_mean, std.dev = SELFEMPLOYED_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, MAINEMPLOYER , color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "MAINEMPLOYER ") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(SELFEMPLOYED ~ GROUP, data )
+```
+6. TIME_EMPLOYED - Year round employment (share)
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$TIME_EMPLOYED ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+TIME_EMPLOYED_mean <- tapply(as.numeric(data$TIME_EMPLOYED ), data$GROUP, mean)
+TIME_EMPLOYED_sd <- tapply(as.numeric((data$TIME_EMPLOYED)), data$GROUP, sd)
+n <- tapply(data$TIME_EMPLOYED , data$GROUP, length)
+data.frame(mean =TIME_EMPLOYED_mean, std.dev = TIME_EMPLOYED_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP,TIME_EMPLOYED , color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "TIME_EMPLOYED ") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(TIME_EMPLOYED ~ GROUP, data )
+```
+
+7. COWS  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Create COWS_Dummy
+data=Data[!is.na(Data$COWS), ]
+data$COWS_Dummy = data$COWS
+data$COWS_Dummy[data$COWS_Dummy == "No"] <- 0
+data$COWS_Dummy[data$COWS_Dummy == "Yes"] <- 1
+data_plus$COWS_Dummy = data$COWS_Dummy
+
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+COWS_Dummy_mean <- tapply(as.numeric(data$COWS_Dummy ), data$GROUP, mean)
+COWS_Dummy_sd <- tapply(as.numeric((data$COWS_Dummy)), data$GROUP, sd)
+n <- tapply(data$COWS_Dummy , data$GROUP, length)
+data.frame(mean =COWS_Dummy_mean, std.dev =COWS_Dummy_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP,COWS_Dummy, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "COWS_Dummy") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(COWS_Dummy~ GROUP, data )
+```
+
+8. TV  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+
+### Create TV_Dummy
+data$TV_Dummy = data$TV
+data$TV_Dummy[data$TV_Dummy == "No"] <- 0
+data$TV_Dummy[is.na(data$TV_Dummy)] <- 0
+data$TV_Dummy[data$TV_Dummy == "Yes"] <- 1
+data_plus$TV_Dummy = data$TV_Dummy
+
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+TV_Dummy_mean <- tapply(as.numeric(data$TV_Dummy ), data$GROUP, mean)
+TV_Dummy_sd <- tapply(as.numeric((data$TV_Dummy)), data$GROUP, sd)
+n <- tapply(data$TV_Dummy , data$GROUP, length)
+data.frame(mean =TV_Dummy_mean, std.dev =TV_Dummy_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP,TV_Dummy, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "TV_Dummy") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(TV_Dummy~ GROUP, data )
+```
+9. ***Total_Asset - this is computed with all the wealth dummies and durable good prices provided. *** 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+
+### Create TV_Dummy
+ASSET_TOTAL = read.csv("ASSET_VALUE.csv")
+data_plus$ASSET_TOTAL = ASSET_TOTAL$ASSET
+data = data_plus
+
+### Summary
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+
+ASSET_TOTAL_mean <- tapply(data$ASSET_TOTAL, data$GROUP, mean)
+ASSET_TOTAL_sd <- tapply(as.numeric((data$ASSET_TOTAL)), data$GROUP, sd)
+n <- tapply(data$ASSET_TOTAL , data$GROUP, length)
+data.frame(mean =ASSET_TOTAL_mean, std.dev =ASSET_TOTAL_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP,ASSET_TOTAL, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "ASSET_TOTAL") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(ASSET_TOTAL~ GROUP, data )
+```
+
+### 2.2.3 Cookstove variables - C
+1.WOOD - the dummy of whether wood is the primary fuel.  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$WOOD ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+WOOD_mean <- tapply(as.numeric(data$WOOD), data$GROUP, mean)
+WOOD_sd <- tapply(as.numeric((data$WOOD)), data$GROUP, sd)
+n <- tapply(data$WOOD, data$GROUP, length)
+data.frame(mean = WOOD_mean, std.dev = WOOD_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, WOOD, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "WOOD") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(WOOD ~ GROUP, data )
+```
+
+2. TSF_PRIMARY - whether a three-stone fire is the primary stove. None means owning a stone stove. Test on TSF_PRIMARY, visualization on STOVES1. 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$STOVES1 ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+TSF_PRIMARY_mean <- tapply(as.numeric(data$TSF_PRIMARY), data$GROUP, mean)
+TSF_PRIMARY_sd <- tapply(as.numeric((data$TSF_PRIMARY)), data$GROUP, sd)
+n <- tapply(data$TSF_PRIMARY, data$GROUP, length)
+data.frame(mean = TSF_PRIMARY_mean, std.dev = TSF_PRIMARY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, STOVES1, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "STOVES1") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(TSF_PRIMARY ~ GROUP, data )
+```
+3. BUYWOOD_DUMMY- buys wood last week or month  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$BUYWOOD_DUMMY ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+BUYWOOD_DUMMY_mean <- tapply(as.numeric(data$BUYWOOD_DUMMY), data$GROUP, mean)
+BUYWOOD_DUMMY_sd <- tapply(as.numeric((data$BUYWOOD_DUMMY)), data$GROUP, sd)
+n <- tapply(data$BUYWOOD_DUMMY, data$GROUP, length)
+data.frame(mean = BUYWOOD_DUMMY_mean, std.dev = BUYWOOD_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, BUYWOOD_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "BUYWOOD_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(BUYWOOD_DUMMY ~ GROUP, data )
+```
+4. GATHERWOOD_DUMMY -  whether the household gathered wood last week  
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$GATHERWOOD_DUMMY ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+GATHERWOOD_DUMMY_mean <- tapply(as.numeric(data$GATHERWOOD_DUMMY), data$GROUP, mean)
+GATHERWOOD_DUMMY_sd <- tapply(as.numeric((data$GATHERWOOD_DUMMY)), data$GROUP, sd)
+n <- tapply(data$GATHERWOOD_DUMMY, data$GROUP, length)
+data.frame(mean = GATHERWOOD_DUMMY_mean, std.dev = GATHERWOOD_DUMMY_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, GATHERWOOD_DUMMY, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "GATHERWOOD_DUMMY") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(GATHERWOOD_DUMMY ~ GROUP, data )
+```
+
+### 2.2.4 Dependent variables - Y
+***1. MAXBID***
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$MAXBID ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+MAXBID_mean <- tapply(as.numeric(data$MAXBID), data$GROUP, mean)
+MAXBID_sd <- tapply(as.numeric((data$MAXBID)), data$GROUP, sd)
+n <- tapply(data$MAXBID, data$GROUP, length)
+data.frame(mean = MAXBID_mean, std.dev = MAXBID_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, MAXBID, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "MAXBID") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(MAXBID ~ GROUP, data )
+```
+***2. MAXBIDNOVEL***
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Summary
+data=Data[!is.na(Data$MAXBIDNOVEL ), ]
+data$GROUP<- factor(data$GROUP, levels = c("No Message", "Improves Health", "Saves Time and Money","Time, Money and Health" )) 
+MAXBIDNOVEL_mean <- tapply(as.numeric(data$MAXBIDNOVEL), data$GROUP, mean)
+MAXBIDNOVEL_sd <- tapply(as.numeric((data$MAXBIDNOVEL)), data$GROUP, sd)
+n <- tapply(data$MAXBIDNOVEL, data$GROUP, length)
+data.frame(mean = MAXBIDNOVEL_mean, std.dev = MAXBIDNOVEL_sd, n = n)
+
+### Visualization
+ggplot(data, aes(GROUP, MAXBIDNOVEL, color=GROUP)) +
+  geom_boxplot(show.legend=FALSE, outlier.shape = NA) +
+  geom_jitter(width=0.3, alpha = 0.4, size=0.9, show.legend=FALSE) +
+  ylab(label = "MAXBIDNOVEL") +
+  stat_summary(fun = "mean", size = 5, geom = "point", shape=18, color = 'black') +
+  geom_hline(yintercept = 0) +
+  theme_grey(base_size=10) 
+
+### Krusal-Wallis test
+kruskal.test(MAXBIDNOVEL ~ GROUP, data )
+```
+## 2.3 Full sample - Pooled statistics
+```{r}
+### Clean the incomplete observations, note: save in a new "data" in lower
+data_temp=Data[!is.na(Data$AGE), ]
+### Table of descriptive statistics by treatment group
+temp_mean <- mean(data_temp$AGE)
+temp_sd <- sd(data_temp$AGE)
+temp_n <- length(data_temp$AGE)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$FEMALE), ]
+temp_mean <- mean(data_temp$FEMALE)
+temp_sd <- sd(data_temp$FEMALE)
+temp_n <- length(data_temp$FEMALE)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$MARRIED), ]
+temp_mean <- mean(data_temp$MARRIED)
+temp_sd <- sd(data_temp$MARRIED)
+temp_n <- length(data_temp$MARRIED)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$WIFECOOK), ]
+temp_mean <- mean(data_temp$WIFECOOK)
+temp_sd <- sd(data_temp$WIFECOOK)
+temp_n <- length(data_temp$WIFECOOK)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$JOINTDECISION), ]
+temp_mean <- mean(data_temp$JOINTDECISION)
+temp_sd <- sd(data_temp$JOINTDECISION)
+temp_n <- length(data_temp$JOINTDECISION)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$KNOWLUNCH_Dummy), ]
+temp_mean <- mean(data_temp$KNOWLUNCH_Dummy)
+temp_sd <- sd(data_temp$KNOWLUNCH_Dummy)
+temp_n <- length(data_temp$KNOWLUNCH_Dummy)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$LUNCHYESTERDAY), ]
+temp_mean <- mean(data_temp$LUNCHYESTERDAY)
+temp_sd <- sd(data_temp$LUNCHYESTERDAY)
+temp_n <- length(data_temp$LUNCHYESTERDAY)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$TYPICALNUMEATING_Dummy), ]
+temp_mean <- mean(as.numeric(data_temp$TYPICALNUMEATING_Dummy))
+temp_sd <- sd(as.numeric(data_temp$TYPICALNUMEATING_Dummy))
+temp_n <- length(as.numeric(data_temp$TYPICALNUMEATING_Dummy))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$CASHPAID_Dummy), ]
+temp_mean <- mean(as.numeric(data_temp$CASHPAID_Dummy))
+temp_sd <- sd(as.numeric(data_temp$CASHPAID_Dummy))
+temp_n <- length(data_temp$CASHPAID_Dummy)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$ASSET_TOTAL), ]
+temp_mean <- mean(data_temp$ASSET_TOTAL)
+temp_sd <- sd(data_temp$ASSET_TOTAL)
+temp_n <- length(data_temp$ASSET_TOTAL)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+```
+
+```{r}
+data_temp=Data[!is.na(Data$HH_PHONES), ]
+temp_mean <- mean(data_temp$HH_PHONES)
+temp_sd <- sd(data_temp$HH_PHONES)
+temp_n <- length(data_temp$HH_PHONES)
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$INCOME_Dummy), ]
+temp_mean <- mean(as.numeric(data_temp$INCOME_Dummy))
+temp_sd <- sd(as.numeric(data_temp$INCOME_Dummy))
+temp_n <- length(as.numeric(data_temp$INCOME_Dummy))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$BICYCLE_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$BICYCLE_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$BICYCLE_DUMMY))
+temp_n <- length(as.numeric(data_temp$BICYCLE_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$CAR_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$CAR_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$CAR_DUMMY))
+temp_n <- length(as.numeric(data_temp$CAR_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$MOTORCYCLE_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$MOTORCYCLE_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$MOTORCYCLE_DUMMY))
+temp_n <- length(as.numeric(data_temp$MOTORCYCLE_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$RADIO_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$RADIO_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$RADIO_DUMMY))
+temp_n <- length(as.numeric(data_temp$RADIO_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(data_plus$SELFEMPLOYED ), ]
+temp_mean <- mean(as.numeric(data_temp$SELFEMPLOYED ))
+temp_sd <- sd(as.numeric(data_temp$SELFEMPLOYED ))
+temp_n <- length(as.numeric(data_temp$SELFEMPLOYED ))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$TIME_EMPLOYED), ]
+temp_mean <- mean(as.numeric(data_temp$TIME_EMPLOYED))
+temp_sd <- sd(as.numeric(data_temp$TIME_EMPLOYED))
+temp_n <- length(as.numeric(data_temp$TIME_EMPLOYED))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$COWS_Dummy), ]
+temp_mean <- mean(as.numeric(data_temp$COWS_Dummy))
+temp_sd <- sd(as.numeric(data_temp$COWS_Dummy))
+temp_n <- length(as.numeric(data_temp$COWS_Dummy))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=data_plus[!is.na(data_plus$TV_Dummy), ]
+temp_mean <- mean(as.numeric(data_temp$TV_Dummy))
+temp_sd <- sd(as.numeric(data_temp$TV_Dummy))
+temp_n <- length(as.numeric(data_temp$TV_Dummy))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+```
+```{r}
+data_temp=Data[!is.na(Data$WOOD), ]
+temp_mean <- mean(as.numeric(data_temp$WOOD))
+temp_sd <- sd(as.numeric(data_temp$WOOD))
+temp_n <- length(as.numeric(data_temp$WOOD))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$TSF_PRIMARY), ]
+temp_mean <- mean(as.numeric(data_temp$TSF_PRIMARY))
+temp_sd <- sd(as.numeric(data_temp$TSF_PRIMARY))
+temp_n <- length(as.numeric(data_temp$TSF_PRIMARY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$BUYWOOD_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$BUYWOOD_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$BUYWOOD_DUMMY))
+temp_n <- length(as.numeric(data_temp$BUYWOOD_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$GATHERWOOD_DUMMY), ]
+temp_mean <- mean(as.numeric(data_temp$GATHERWOOD_DUMMY))
+temp_sd <- sd(as.numeric(data_temp$GATHERWOOD_DUMMY))
+temp_n <- length(as.numeric(data_temp$GATHERWOOD_DUMMY))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$MAXBID ), ]
+temp_mean <- mean(as.numeric(data_temp$MAXBID ))
+temp_sd <- sd(as.numeric(data_temp$MAXBID ))
+temp_n <- length(as.numeric(data_temp$MAXBID ))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+
+data_temp=Data[!is.na(Data$MAXBIDNOVEL), ]
+temp_mean <- mean(as.numeric(data_temp$MAXBIDNOVEL))
+temp_sd <- sd(as.numeric(data_temp$MAXBIDNOVEL))
+temp_n <- length(as.numeric(data_temp$MAXBIDNOVEL))
+data.frame(t(c(temp_mean,temp_sd,temp_n)))
+```
+
+## 2.4 Balance Joint Test (Pairwise F-Test) - TBD
+A more robust test is conducted here. We perform pairwise tests, as follows
+$$Message_{i}=\alpha+\gamma'X_{i}+\epsilon_i$$
+i=0,1 denotes the two compared groups. We will totally do 6 tests, pairwisely, and see the F-stat. 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Creat group dummies
+data_plus$No_message = ifelse(data_plus$GROUP == "No Message", 1, 0)
+data_plus$Improves_Health = ifelse(data_plus$GROUP == "Improves Health", 1, 0)
+data_plus$Time_Money_Health = ifelse(data_plus$GROUP == "Time, Money and Health", 1, 0)
+data_plus$Time_Money= ifelse(data_plus$GROUP == "Saves Time and Money", 1, 0)
+data_plus = data.frame(data_plus,stringsAsFactors = FALSE)
+
+```
+### 2.4.1 Test of socioecon characteristics randomization ###
+No message vs Time and money
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### No message vs Improves Health
+Joint_Test1 = data_plus[ which(data_plus$No_message == 1 | data_plus$Improves_Health == 1),]
+lm_JT1= lm(Improves_Health ~ FEMALE+AGE+MARRIED+WIFECOOK+KNOWLUNCH_Dummy+LUNCHYESTERDAY, data=Joint_Test1)
+
+summary(lm_JT1)
+
+```
+No message vs Time, Money and Health
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Improves Health vs Time, Money and Health
+Joint_Test2 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money == 1),]
+lm_JT2= lm(Time_Money ~ FEMALE+AGE+MARRIED+WIFECOOK+KNOWLUNCH_Dummy+LUNCHYESTERDAY, data=Joint_Test2)
+
+summary(lm_JT2)
+```
+NO message vs Time money and health
+```{r}
+Joint_Test3 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money_Health == 1),]
+lm_JT3 = lm(Time_Money_Health ~ FEMALE+AGE+MARRIED+WIFECOOK+KNOWLUNCH_Dummy+LUNCHYESTERDAY, data=Joint_Test3)
+
+summary(lm_JT3)
+```
+### 2.4.2 Randomization of wealth characteristic
+No message vs Improve health
+```{r}
+Joint_Test4 = data_plus[ which(data_plus$No_message == 1 | data_plus$Improves_Health == 1),]
+
+lm_JT4 = lm(Improves_Health ~ HH_PHONES+BICYCLE_DUMMY+CAR_DUMMY+MOTORCYCLE_DUMMY+RADIO_DUMMY+TIME_EMPLOYED+COWS_Dummy+TV_Dummy, data=Joint_Test4)
+summary(lm_JT4)
+```
+No message vs Time and money
+```{r}
+Joint_Test5 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money == 1),]
+
+lm_JT5 = lm(Time_Money ~ BICYCLE_DUMMY+CAR_DUMMY+MOTORCYCLE_DUMMY+RADIO_DUMMY+TIME_EMPLOYED+COWS_Dummy+TV_Dummy, data=Joint_Test5)
+summary(lm_JT5)
+# +WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+GATHERWOOD_DUMMY+MAXBID+MAXBIDNOVEL
+```
+
+No message vs Time and money and health
+```{r}
+Joint_Test6 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money_Health == 1),]
+
+lm_JT6 = lm(Time_Money_Health ~ BICYCLE_DUMMY+CAR_DUMMY+MOTORCYCLE_DUMMY+RADIO_DUMMY+COWS_Dummy+TV_Dummy, data=Joint_Test6)
+summary(lm_JT6)
+```
+### 2.4.3 Randomization of cookstove related variables
+No message vs Time money and health
+```{r}
+Joint_Test7 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money_Health == 1),]
+
+lm_JT7 = lm(Time_Money_Health ~WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+GATHERWOOD_DUMMY , data=Joint_Test7)
+summary(lm_JT7)
+```
+No message vs Time money 
+```{r}
+Joint_Test8 = data_plus[ which(data_plus$No_message == 1 | data_plus$Time_Money == 1),]
+
+lm_JT8 = lm(Time_Money~WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+GATHERWOOD_DUMMY , data=Joint_Test8)
+summary(lm_JT8)
+```
+
+No message vs Improves health
+```{r}
+Joint_Test9 = data_plus[ which(data_plus$No_message == 1 | data_plus$Improves_Health == 1),]
+
+lm_JT9 = lm(Improves_Health ~WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+GATHERWOOD_DUMMY , data=Joint_Test9)
+summary(lm_JT9)
+```
+## 2.5 Demand Curves
+This is drawn by excel. See the excel file. 
+
+# 3. Correlations - Figure 2 and 3
+## 3.1 Within Socio-Economic Variables
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+
+library(GGally)
+library(ggplot2)
+
+### Plot the correlations
+
+ggp1=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 4)), columns=c(which(colnames(data_plus)=="AGE"),which(colnames(data_plus)=="FEMALE"),which(colnames(data_plus)=="MARRIED"),which(colnames(data_plus)=="WIFECOOK"),which(colnames(data_plus)=="JOINTDECISION"),which(colnames(data_plus)=="KNOWLUNCH_Dummy"),which(colnames(data_plus)=="LUNCHYESTERDAY") ))
+print(ggp1 + ggtitle("Scatterplot, Correlation and Histogram of Socio-Econ Variables"))
+
+```
+All the correlations within socio-economic variables is so low that we do not need to worry about collinearity issues when put them in the regression model. 
+
+## 3.2 Within Wealth Variables
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Clean the data format
+
+data_plus$COWS_Dummy = as.numeric(data_plus$COWS_Dummy)
+data_plus$TV_Dummy = as.numeric(data_plus$TV_Dummy)
+data_plus$INCOME_Dummy = data_plus$INCOME
+data_plus$INCOME_Dummy[data_plus$INCOME_Dummy == "No"] <- 0
+data_plus$INCOME_Dummy[data_plus$INCOME_Dummy == "Yes"] <- 1
+data_plus$INCOME_Dummy = as.numeric(data_plus$INCOME_Dummy)
+
+
+### Plot Correlations
+ggp2=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="HH_PHONES"),which(colnames(data_plus)=="INCOME_Dummy"),which(colnames(data_plus)==" BICYCLE_DUMMY"),which(colnames(data_plus)=="MOTORCYCLE_DUMMY"),which(colnames(data_plus)=="CAR_DUMMY"),which(colnames(data_plus)=="RADIO_DUMMY"),which(colnames(data_plus)==" MAINEMPLOYER") ,which(colnames(data_plus)=="TIME_EMPLOYED "),which(colnames(data_plus)=="COWS_Dummy"),which(colnames(data_plus)=="TV_Dummy")))
+print(ggp2 + ggtitle("Scatterplot, Correlation and Histogram of Wealth Variables"))
+
+```
+All the correlations within Wealth variables is so low that we do not need to worry about collinearity issues when put them in the regression model. 
+
+## 3.3 Within Cookstove use Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+ggp3=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="WOOD"),which(colnames(data_plus)=="TSF_PRIMARY") ,which(colnames(data_plus)=="BUYWOOD_DUMMY"),which(colnames(data_plus)=="GATHERWOOD_DUMMY")))
+print(ggp3 + ggtitle("Scatterplot, Correlation and Histogram of Cookstove Variables"))
+```
+
+
+## 3.4 Cross sectional Check - Gender Effect
+We check the correlation between female and all cookstove variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+ggp4=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="WOOD"),which(colnames(data_plus)=="TSF_PRIMARY") ,which(colnames(data_plus)=="BUYWOOD_DUMMY"),which(colnames(data_plus)=="GATHERWOOD_DUMMY"),which(colnames(data_plus)=="FEMALE")))
+print(ggp4 + ggtitle("Scatterplot, Correlation and Histogram of FEMALE & Cookstove"))
+```
+We can exclude the collinearty issue between gender and cookstove use. 
+
+# 4 Dependent on Explanatory Variables - Simple Linear Regressions - Figure 2 and 3
+## 4.1 Correlation between Bidprices and the Explanatory Variables 
+### 4.1.1 Bidprices with Socio-econ Demographic Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Socio-Econ Variables
+ggp5=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 4)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="AGE"),which(colnames(data_plus)=="FEMALE"),which(colnames(data_plus)=="MARRIED"),which(colnames(data_plus)=="WIFECOOK"),which(colnames(data_plus)=="JOINTDECISION"),which(colnames(data_plus)=="KNOWLUNCH_Dummy"),which(colnames(data_plus)=="LUNCHYESTERDAY") ))
+print(ggp5 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Socio-Econ Variables"))
+
+
+### Novel bidprice with Socio-Econ Variables
+ggp6=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 4)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="AGE"),which(colnames(data_plus)=="FEMALE"),which(colnames(data_plus)=="MARRIED"),which(colnames(data_plus)=="WIFECOOK"),which(colnames(data_plus)=="JOINTDECISION"),which(colnames(data_plus)=="KNOWLUNCH_Dummy"),which(colnames(data_plus)=="LUNCHYESTERDAY") ))
+print(ggp6 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Socio-Econ Variables"))
+
+```
+It shows that LUNCHYESTERDAY has ignorable correlation with either bidprices or novel bidprices. AGE, WIFEWOOK,MARRIED, JOINTDECISION and KNOWlUNCH_Dummy also have very week correlations with bidpices, respectively. 
+
+### 4.1.2 Bidprices with Wealth Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Wealth
+ggp7=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="HH_PHONES"),which(colnames(data_plus)=="INCOME_Dummy"),which(colnames(data_plus)==" BICYCLE_DUMMY"),which(colnames(data_plus)=="MOTORCYCLE_DUMMY"),which(colnames(data_plus)=="CAR_DUMMY"),which(colnames(data_plus)=="RADIO_DUMMY"),which(colnames(data_plus)==" MAINEMPLOYER") ,which(colnames(data_plus)=="TIME_EMPLOYED "),which(colnames(data_plus)=="COWS_Dummy"),which(colnames(data_plus)=="TV_Dummy")))
+print(ggp7 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Wealth Variables"))
+
+### Novel bidprice with Wealth
+ggp8=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="HH_PHONES"),which(colnames(data_plus)=="INCOME_Dummy"),which(colnames(data_plus)==" BICYCLE_DUMMY"),which(colnames(data_plus)=="MOTORCYCLE_DUMMY"),which(colnames(data_plus)=="CAR_DUMMY"),which(colnames(data_plus)=="RADIO_DUMMY"),which(colnames(data_plus)==" MAINEMPLOYER") ,which(colnames(data_plus)=="TIME_EMPLOYED "),which(colnames(data_plus)=="COWS_Dummy"),which(colnames(data_plus)=="TV_Dummy")))
+print(ggp8 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Wealth Variables"))
+```
+It shows that all the wealth variables have small correlation with either bidprices or novel bidprices, but more consistently, larger than the correlation between socio-economic variables
+
+### 4.1.3 Bidprices with Cookstove Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Cookstove
+ggp9=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="WOOD"),which(colnames(data_plus)=="TSF_PRIMARY"),which(colnames(data_plus)=="BUYWOOD_DUMMY"),which(colnames(data_plus)=="GATHERWOOD_DUMMY")))
+print(ggp9 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Cookstove Variables"))
+
+### Novel bidprice with Cookstove
+ggp10=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="WOOD"),which(colnames(data_plus)=="TSF_PRIMARY"),which(colnames(data_plus)=="BUYWOOD_DUMMY"),which(colnames(data_plus)=="GATHERWOOD_DUMMY")))
+print(ggp10 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Cookstove Variables"))
+```
+### 4.1.4 Gender Interaction Term
+First, create the interactions
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Gender with Socio−Economic Variables
+data_plus$Female_AGE=data_plus$AGE*data_plus$FEMALE
+data_plus$Female_MARRIED=data_plus$MARRIED*data_plus$FEMALE
+data_plus$Female_WIFECOOK=data_plus$WIFECOOK*data_plus$FEMALE
+data_plus$Female_JOINTDECISION=data_plus$JOINTDECISION*data_plus$FEMALE
+data_plus$Female_KNOWLUNCH_Dummy=data_plus$KNOWLUNCH_Dummy*data_plus$FEMALE
+data_plus$Female_LUNCHYESTERDAY=data_plus$LUNCHYESTERDAY*data_plus$FEMALE
+
+### Gender with Wealth
+data_plus$Female_HH_PHONES=data_plus$HH_PHONES*data_plus$FEMALE
+data_plus$Female_INCOME_Dummy=data_plus$INCOME_Dummy*data_plus$FEMALE
+data_plus$Female_MOTORCYCLE_DUMMY=data_plus$MOTORCYCLE_DUMMY*data_plus$FEMALE
+data_plus$Female_CAR_DUMMY=data_plus$CAR_DUMMY*data_plus$FEMALE
+data_plus$Female_RADIO_DUMMY=data_plus$RADIO_DUMMY*data_plus$FEMALE
+data_plus$Female_COWS_Dummy=data_plus$COWS_Dummy*data_plus$FEMALE
+data_plus$Female_TV_Dummy=data_plus$TV_Dummy*data_plus$FEMALE
+
+### Gender with Cookstove
+data_plus$Female_WOOD=data_plus$WOOD*data_plus$FEMALE
+data_plus$Female_TSF_PRIMARY=data_plus$TSF_PRIMARY*data_plus$FEMALE
+data_plus$Female_BUYWOOD_DUMMY=data_plus$BUYWOOD_DUMMY*data_plus$FEMALE
+data_plus$Female_GATHERWOOD_DUMMY=data_plus$GATHERWOOD_DUMMY*data_plus$FEMALE
+data_plus$Female_TotalAsset = data_plus$ASSET_TOTAL*data_plus$FEMALE
+```
+
+Second, check the correlations
+#### 1) Bidprices with Gender * Socio-econ Demographic Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Gender*Socio-Econ Variables
+ggp11=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 4)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="Female_AGE"),which(colnames(data_plus)=="Female_MARRIED"),which(colnames(data_plus)=="Female_WIFECOOK"),which(colnames(data_plus)=="Female_JOINTDECISION"),which(colnames(data_plus)=="Female_KNOWLUNCH_Dummy"),which(colnames(data_plus)=="Female_LUNCHYESTERDAY") ))
+print(ggp11 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Gender * Socio-Econ Variables"))
+
+
+### Novel bidprice with Gender*Socio-Econ Variables
+ggp12=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 4)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="Female_AGE"),which(colnames(data_plus)=="Female_MARRIED"),which(colnames(data_plus)=="Female_WIFECOOK"),which(colnames(data_plus)=="Female_JOINTDECISION"),which(colnames(data_plus)=="Female_KNOWLUNCH_Dummy"),which(colnames(data_plus)=="Female_LUNCHYESTERDAY") ))
+print(ggp12 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Gender * Socio-Econ Variables"))
+
+```
+#### 2) Bidprices with Gender * Wealth Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Gender*Wealth
+ggp13=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="Female_HH_PHONES"),which(colnames(data_plus)=="Female_INCOME_Dummy"),which(colnames(data_plus)==" Female_BICYCLE_DUMMY"),which(colnames(data_plus)=="Female_MOTORCYCLE_DUMMY"),which(colnames(data_plus)=="Female_CAR_DUMMY"),which(colnames(data_plus)=="Female_RADIO_DUMMY"),which(colnames(data_plus)=="Female_MAINEMPLOYER") ,which(colnames(data_plus)=="Female_TIME_EMPLOYED "),which(colnames(data_plus)=="Female_COWS_Dummy"),which(colnames(data_plus)=="Female_TV_Dummy")))
+print(ggp13 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Gender*Wealth Variables"))
+
+### Novel bidprice with Gender*Wealth
+ggp14=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="Female_HH_PHONES"),which(colnames(data_plus)=="Female_INCOME_Dummy"),which(colnames(data_plus)=="Female_BICYCLE_DUMMY"),which(colnames(data_plus)=="Female_MOTORCYCLE_DUMMY"),which(colnames(data_plus)=="Female_CAR_DUMMY"),which(colnames(data_plus)=="Female_RADIO_DUMMY"),which(colnames(data_plus)=="Female_MAINEMPLOYER") ,which(colnames(data_plus)=="Female_TIME_EMPLOYED "),which(colnames(data_plus)=="Female_COWS_Dummy"),which(colnames(data_plus)=="Female_TV_Dummy")))
+print(ggp14 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Gender*Wealth Variables"))
+```
+#### 3) Bidprices with Gender * Cookstove Variables
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### Bidprice with Cookstove
+ggp15=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBID"),which(colnames(data_plus)=="Female_WOOD"),which(colnames(data_plus)=="Female_TSF_PRIMARY"),which(colnames(data_plus)=="Female_BUYWOOD_DUMMY"),which(colnames(data_plus)=="Female_GATHERWOOD_DUMMY")))
+print(ggp15 + ggtitle("Scatterplot, Correlation and Histogram of Bidprices & Gender*Cookstove Variables"))
+
+### Novel bidprice with Cookstove
+ggp16=ggpairs(data_plus,upper = list(continuous = wrap("cor", size = 3)), columns=c(which(colnames(data_plus)=="MAXBIDNOVEL"),which(colnames(data_plus)=="Female_WOOD"),which(colnames(data_plus)=="Female_TSF_PRIMARY"),which(colnames(data_plus)=="Female_BUYWOOD_DUMMY"),which(colnames(data_plus)=="Female_GATHERWOOD_DUMMY")))
+print(ggp16 + ggtitle("Scatterplot, Correlation and Histogram of Novel Bidprices & Gender*Cookstove Variables"))
+```
+
+### 4.1.5 Important Varibles Noted
+***Absolute value of correlation  - 10%*** 
+FEMALE, HH_PHONE, TSF_PRIMARY, BICYCLE_Dummy.  
+  
+***Absolute value of correlation - 5% ***  
+MARRIED, JOINTDECISION, INCOME_Dummy, CAR_Dummy, RADIO_Dummy, COW_Dummy, TV_Dummy.  
+  
+***Absolute value of correlation - 1% ***  
+AGE, FEMALE, WIFECOOK, KNOWLUNCH_DUMMY, WOOD, BUYWOOD.  
+
+***Absolute value of correlation - <1% ***  
+GATHERWOOD_DUMMY, LUNCHYESTERDAY, KNOWLUNCH_Dummy  
+  
+***Save the augmented data***  
+After combine the asset variable created, we form a data_plus file, both in csv and dta.
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### save the expanding dataset
+write.csv(data_plus,"data_plus.csv")
+```
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+library(foreign)
+write.dta(data_plus, "data_plus.dta")
+```
+
+All the correlations within Cookstove variables is so low that we do not need to worry about collinearity issues when put them in the regression model. 
+
+## 4.2 Simple linear regressions
+The results are the base for section 4, which will be discussed later. 
+  
+  
+# 5 Bidprices on group and explanatory variables (fixed effect) - table 4,5 and 6
+
+
+District FE 
+Survey Day FE
+
+## 5.1 Multiple regression without controls [District FE + Survey Date FE]
+pay within week vs four weeks.  
+***Note: NA as a coefficient in a regression indicates that the variable in question is linearly related to the other variables. ***
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+### run a pair of models without fixed effects
+lm1 = lm(MAXBID ~ Improves_Health+Time_Money+Time_Money_Health, data = data_plus)
+summary(lm1)
+
+lm2 = lm(MAXBIDNOVEL ~ Improves_Health+Time_Money+Time_Money_Health, data = data_plus)
+summary(lm2)
+
+### Run a pair of fixed effect models - pay within week
+lm3 = lm(MAXBID ~ Improves_Health+Time_Money+Time_Money_Health+DATESURVEY+PARISH+ASSET_TOTAL- 1, data=data_plus, na.action=na.omit)
+summary(lm3)
+### Time payment
+lm4 = lm(MAXBIDNOVEL ~ Improves_Health+Time_Money+Time_Money_Health+DATESURVEY+PARISH+ASSET_TOTAL- 1, data=data_plus, na.action=na.omit)
+summary(lm4)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm1)$coefficients[2:4, c(1,2,4)])
+data.frame(summary(lm2)$coefficients[2:4, c(1,2,4)])
+data.frame(summary(lm3)$coefficients[1:3, c(1,2,4)])
+data.frame(summary(lm4)$coefficients[1:3, c(1,2,4)])
+```
+
+## 5.2 Multiple regression + HH level controls + Total Asset [District FE + Survey Date FE + ]
+We leave out LUNCHYESTERDAY, TYPICALNUMEATING_Dummy, and HOWPAID, which make the group message effect dramatically insignificant. 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+# library(plm)
+# lm2 <- plm(MAXBID ~ No_message+Improves_Health+Time_Money_Health+Time_Money+FEMALE+AGE+MARRIED+WIFECOOK+JOINTDECISION+KNOWLUNCH_Dummy,
+#                    data = data_plus,
+#                   index = c("DATESURVEY","UNIQUE_HHID"), 
+#                    model = "within")
+# summary(lm2)
+
+
+lm5 = lm(MAXBID ~Improves_Health + Time_Money + Time_Money_Health+ FEMALE+AGE+MARRIED+KNOWLUNCH_Dummy+WIFECOOK+JOINTDECISION+DATESURVEY+PARISH+ASSET_TOTAL-1,  data=data_plus)
+summary(lm5)
+
+lm6 = lm(MAXBIDNOVEL ~Improves_Health + Time_Money + Time_Money_Health+ FEMALE+AGE+MARRIED+KNOWLUNCH_Dummy+WIFECOOK+JOINTDECISION+DATESURVEY+PARISH+ASSET_TOTAL-1,  data=data_plus)
+summary(lm6)
+
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm5)$coefficients[1:9, c(1,2,4)])
+data.frame(summary(lm6)$coefficients[1:9, c(1,2,4)])
+
+```
+
+## 5.3 Multiple regression +  Wealth level controls [District FE + Survey Date FE]
+We ingore TIME_EMPLOYED, SELFEMPLOYED as they are not significant. Since almost all the asset dummies are significant, we do two ways, one is with original dummies, another is with the created total asset variable.  
+  
+Use the dummies.
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+lm7 = lm(MAXBID ~Improves_Health + Time_Money + Time_Money_Health+HH_PHONES+INCOME_Dummy+BICYCLE_DUMMY+CAR_DUMMY+MOTORCYCLE_DUMMY+RADIO_DUMMY+COWS_Dummy+TV_Dummy +SELFEMPLOYED + TIME_EMPLOYED+ DATESURVEY+PARISH-1,na.action = na.omit, data=data_plus)
+summary(lm7)
+
+lm8 = lm(MAXBIDNOVEL ~Improves_Health + Time_Money + Time_Money_Health+HH_PHONES+INCOME_Dummy+BICYCLE_DUMMY+CAR_DUMMY+MOTORCYCLE_DUMMY+RADIO_DUMMY+COWS_Dummy+TV_Dummy+SELFEMPLOYED + TIME_EMPLOYED +DATESURVEY+PARISH-1,na.action = na.omit, data=data_plus)
+summary(lm8)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm7)$coefficients[1:13, c(1,2,4)])
+data.frame(summary(lm8)$coefficients[1:13, c(1,2,4)])
+```
+
+Use the total asset 
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+lm9 = lm(MAXBID ~Improves_Health + Time_Money + Time_Money_Health+ ASSET_TOTAL+ DATESURVEY+PARISH-1,na.action = na.omit, data=data_plus)
+summary(lm9)
+
+lm10 = lm(MAXBIDNOVEL ~Improves_Health + Time_Money + Time_Money_Health+ASSET_TOTAL+ DATESURVEY+PARISH-1,na.action = na.omit, data=data_plus)
+summary(lm10)
+```
+
+
+## 5.4 Multiple regression + Cookstove level controls+ Total Asset [District FE + Survey Date FE ]
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+lm11 = lm(MAXBID ~ Improves_Health + Time_Money + Time_Money_Health+WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+ GATHERWOOD_DUMMY+STOVES1+DATESURVEY+PARISH+ ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lm11)
+
+lm12 = lm(MAXBIDNOVEL ~Improves_Health + Time_Money + Time_Money_Health+WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+ GATHERWOOD_DUMMY+STOVES1+DATESURVEY+PARISH+ ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lm12)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm11)$coefficients[1:10, c(1,2,4)])
+data.frame(summary(lm12)$coefficients[1:10, c(1,2,4)])
+```
+## 5.5  Multiple regression + Socio-economic demographic + Wealth + Cookstove related characteristics [District FE + Survey Date FE]
+```{r}
+lmfull = lm(MAXBID ~ Improves_Health + Time_Money + Time_Money_Health+FEMALE + AGE + MARRIED + KNOWLUNCH_Dummy + WIFECOOK + JOINTDECISION + WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+ GATHERWOOD_DUMMY+STOVES1+DATESURVEY+PARISH+ ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lmfull)
+```
+The R square here reported is 60.04%. 
+
+
+## 5.6 Multiple regression +  Gender and interaction terms [District FE + Survey Date FE]
+Female_WOOD and Female_LUNCHYESTERDAY are ignore since they are higly insignificant.
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+
+lm13 = lm(MAXBID ~ Improves_Health + Time_Money + Time_Money_Health+FEMALE + WIFECOOK+ Female_AGE+	Female_MARRIED+	Female_WIFECOOK+Female_JOINTDECISION+	Female_KNOWLUNCH_Dummy+		Female_INCOME_Dummy+		Female_TSF_PRIMARY+	Female_BUYWOOD_DUMMY+Female_GATHERWOOD_DUMMY+ DATESURVEY+PARISH + ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lm13)
+
+lm14 = lm(MAXBIDNOVEL ~ Improves_Health + Time_Money + Time_Money_Health+FEMALE + WIFECOOK+ Female_AGE+	Female_MARRIED+	Female_WIFECOOK+	Female_KNOWLUNCH_Dummy+		Female_INCOME_Dummy+	Female_BUYWOOD_DUMMY+Female_GATHERWOOD_DUMMY+ DATESURVEY+PARISH + ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lm14)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm13)$coefficients[1:15, c(1,2,4)])
+data.frame(summary(lm14)$coefficients[1:15, c(1,2,4)])
+```
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+#bidprice_lms = data.frame(summary(lm1)$coefficients[,1],summary(lm1)$coefficients[,4],summary(lm3)$coefficients[1:4,1],summary(lm3)$coefficients[1:4,4],summary(lm5)$coefficients[1:4,1],summary(lm5)$coefficients[1:4,4],summary(lm9)$coefficients[1:4,1],summary(lm9)$coefficients[1:4,4],summary(lm11)$coefficients[1:4,1],summary(lm11)$coefficients[1:4,4],summary(lm13)$coefficients[1:4,1], summary(lm13)$coefficients[1:4,4])
+#write.csv(bidprice_lms,"bidprice_lms.csv")
+
+#bidpricenovel_lms =data.frame(summary(lm2)$coefficients[,1],summary(lm2)$coefficients[,4],summary(lm4)$coefficients[1:4,1],summary(lm4)$coefficients[1:4,4],summary(lm6)$coefficients[1:4,1],summary(lm6)$coefficients[1:4,4],summary(lm10)$coefficients[1:4,1],summary(lm10)$coefficients[1:4,4],summary(lm12)$coefficients[1:4,1],summary(lm12)$coefficients[1:4,4],summary(lm14)$coefficients[1:4,1], summary(lm14)$coefficients[1:4,4])
+#write.csv(bidpricenovel_lms,"bidpricenovel_lms.csv")
+
+#summary(lm1)$coefficients[,1]
+```
+
+
+# 6 Pay within a week vs pay within four weeks
+
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+# Form the dataset
+prices = rep(1,2234*2)
+prices[1:2234] = Data$MAXBID
+prices[2235:4468] = Data$MAXBIDNOVEL
+UNIQUE_HHID = rep(1,4468)
+UNIQUE_HHID[1:2234] = Data$UNIQUE_HHID
+UNIQUE_HHID[2235:4468] = Data$UNIQUE_HHID
+Biddummy = rep(1,2234*2)
+Biddummy[1:2234] = 0
+Biddummy[2235:4468] = 1
+intra_person = data.frame(prices, UNIQUE_HHID, Biddummy)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+# run the OLS with fixed effect
+library(plm)
+lm15 = plm(prices ~ Biddummy,
+                   data = intra_person,
+                   index = c("UNIQUE_HHID"),                    
+                   model = "within")
+summary(lm15)
+```
+
+# 7 Wealth Effect
+```{r}
+ASSET_SQ = data_plus$ASSET_TOTAL^2
+library(plm)
+lm16 = plm(MAXBID ~  ASSET_TOTAL+ASSET_SQ+Improves_Health+Time_Money+Time_Money_Health+PARISH -1,
+                    data = data_plus,
+                    index = c("DATESURVEY"), 
+                    model = "within")
+summary(lm16)
+lm17= plm(MAXBIDNOVEL ~  ASSET_TOTAL+ASSET_SQ+Improves_Health+Time_Money+Time_Money_Health+PARISH -1,
+                    data = data_plus,
+                    index = c("DATESURVEY"), 
+                    model = "within")
+
+summary(lm17)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm16)$coefficients[1:6, c(1,2,4)])
+data.frame(summary(lm17)$coefficients[1:6, c(1,2,4)])
+```
+```{r}
+data_plus_log =data_plus[which(data_plus$ASSET_TOTAL >0), ]
+lm18 = plm(log(MAXBID) ~  log(ASSET_TOTAL)+Improves_Health+Time_Money+Time_Money_Health+PARISH -1,
+                    data =data_plus_log ,
+                    index = c("DATESURVEY"), 
+                    model = "within")
+summary(lm18)
+
+lm19 = plm(log(MAXBIDNOVEL) ~  log(ASSET_TOTAL)+Improves_Health+Time_Money+Time_Money_Health+PARISH -1,
+                    data =data_plus_log ,
+                    index = c("DATESURVEY"), 
+                    model = "within")
+summary(lm19)
+```
+```{r, warning=FALSE ,error=FALSE,message=FALSE}
+data.frame(summary(lm18)$coefficients[1:6, c(1,2,4)])
+data.frame(summary(lm19)$coefficients[1:6, c(1,2,4)])
+```
+
+# 8 Machine Learning Model of prediction
+A regression model: Stepwise Selection.
+```{r}
+# Step 1. Box-cox transformation on y.
+lm_ss = lm(log(MAXBID) ~ Improves_Health + Time_Money + Time_Money_Health+FEMALE + AGE + MARRIED + KNOWLUNCH_Dummy + WIFECOOK + JOINTDECISION + WOOD+TSF_PRIMARY+BUYWOOD_DUMMY+ GATHERWOOD_DUMMY+STOVES1+DATESURVEY+PARISH+ ASSET_TOTAL-1,na.action = na.omit, data=data_plus)
+summary(lm_ss)
+# Step 2. transformation on independent variables that are not significant.
+
+```
